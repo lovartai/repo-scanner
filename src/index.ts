@@ -6,6 +6,7 @@ import { HtmlReporter } from './reporters/html-reporter.js';
 import { RepoAnalysis, AnalyzerOptions, ReporterOptions } from './types/index.js';
 import ora from 'ora';
 import chalk from 'chalk';
+import { join } from 'path';
 
 export class RepoScanner {
   private repoPath: string;
@@ -30,11 +31,29 @@ export class RepoScanner {
       const codeAnalyzer = new CodeAnalyzer();
       const files = Array.from(fileAnalysisMap.keys());
       
-      const duplicationInfo = codeAnalyzer.analyzeCodeDuplication(files);
-      const complexityInfo = new Map<string, number>();
+      // Create a map for full paths to relative paths
+      const pathMap = new Map<string, string>();
+      const fullPaths: string[] = [];
       
       for (const file of files) {
-        const complexity = codeAnalyzer.calculateCyclomaticComplexity(file);
+        const fullPath = join(this.repoPath, file);
+        fullPaths.push(fullPath);
+        pathMap.set(fullPath, file);
+      }
+      
+      const duplicationInfo = codeAnalyzer.analyzeCodeDuplication(fullPaths);
+      const complexityInfo = new Map<string, number>();
+      
+      // Convert back to relative paths for storage
+      const relativeDuplicationInfo = new Map<string, any>();
+      for (const [fullPath, info] of duplicationInfo) {
+        const relativePath = pathMap.get(fullPath) || fullPath;
+        relativeDuplicationInfo.set(relativePath, info);
+      }
+      
+      for (const file of files) {
+        const fullPath = join(this.repoPath, file);
+        const complexity = codeAnalyzer.calculateCyclomaticComplexity(fullPath);
         complexityInfo.set(file, complexity);
       }
 
@@ -55,7 +74,7 @@ export class RepoScanner {
       };
 
       // Store analysis results for reporting
-      (analysis as any)._duplicationInfo = duplicationInfo;
+      (analysis as any)._duplicationInfo = relativeDuplicationInfo;
       (analysis as any)._complexityInfo = complexityInfo;
 
       return analysis;

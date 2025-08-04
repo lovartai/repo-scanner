@@ -6,10 +6,12 @@ import { join, relative } from 'path';
 
 export class GitAnalyzer {
   private git: SimpleGit;
+  private repoPath: string;
   private options: AnalyzerOptions;
   private defaultBugKeywords = ['fix', 'bug', 'patch', 'issue', 'error', 'correct', 'resolve'];
 
   constructor(repoPath: string, options: AnalyzerOptions = {}) {
+    this.repoPath = repoPath;
     this.git = simpleGit(repoPath);
     this.options = {
       bugKeywords: options.bugKeywords || this.defaultBugKeywords,
@@ -36,7 +38,7 @@ export class GitAnalyzer {
         bugFixCount: 0,
         lastModified: new Date(),
         firstCommit: new Date(),
-        metrics: await this.analyzeFileMetrics(file),
+        metrics: await this.analyzeFileMetrics(join(this.repoPath, file)),
         authors: []
       });
     }
@@ -53,7 +55,7 @@ export class GitAnalyzer {
     
     for (const pattern of patterns) {
       const matched = await glob(pattern, {
-        cwd: process.cwd(),
+        cwd: this.repoPath,
         ignore: this.options.excludePaths
       });
       files.push(...matched);
