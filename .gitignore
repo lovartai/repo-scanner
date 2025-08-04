@@ -1,0 +1,13 @@
+node_modules/
+dist/
+*.log
+.DS_Store
+.env
+coverage/
+.vscode/
+.idea/
+*.json
+*.csv
+*.html
+!package.json
+!tsconfig.json

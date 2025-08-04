@@ -1,0 +1,36 @@
+{
+  "name": "repo-scanner",
+  "version": "1.0.0",
+  "description": "A tool to analyze git repositories for code modification frequency, bug fixes, and code metrics",
+  "main": "dist/index.js",
+  "bin": {
+    "repo-scanner": "./dist/cli.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsx src/cli.ts",
+    "start": "node dist/cli.js",
+    "test": "vitest",
+    "lint": "eslint src --ext .ts"
+  },
+  "keywords": ["git", "repository", "analysis", "code-quality"],
+  "author": "",
+  "license": "MIT",
+  "type": "module",
+  "dependencies": {
+    "simple-git": "^3.22.0",
+    "commander": "^12.0.0",
+    "ora": "^8.0.1",
+    "chalk": "^5.3.0",
+    "glob": "^10.3.10"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.19",
+    "typescript": "^5.3.3",
+    "tsx": "^4.7.1",
+    "@typescript-eslint/eslint-plugin": "^7.0.0",
+    "@typescript-eslint/parser": "^7.0.0",
+    "eslint": "^8.57.0",
+    "vitest": "^1.3.0"
+  }
+}
