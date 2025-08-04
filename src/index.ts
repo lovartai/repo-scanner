@@ -57,11 +57,25 @@ export class RepoScanner {
         complexityInfo.set(file, complexity);
       }
 
-      // Get total commits count
+      // Get total commits count for the analyzed paths
       const simpleGit = (await import('simple-git')).default;
       const git = simpleGit(this.repoPath);
-      const log = await git.log(['--all']);
-      const totalCommits = log.total;
+      
+      // Build log arguments based on options
+      let logArgs: string[] = ['--oneline'];
+      if (this.options.includePaths && this.options.includePaths.length > 0 && this.options.includePaths[0] !== '**/*') {
+        const basePaths = this.options.includePaths.map(path => 
+          path.replace('/**/*', '').replace('**/*', '')
+        ).filter(path => path.length > 0);
+        
+        if (basePaths.length > 0) {
+          logArgs.push('--');
+          logArgs.push(...basePaths);
+        }
+      }
+      
+      const logResult = await git.raw(['rev-list', '--count', 'HEAD', ...logArgs.slice(1)]);
+      const totalCommits = parseInt(logResult.trim()) || 0;
 
       spinner.succeed('Analysis completed!');
 

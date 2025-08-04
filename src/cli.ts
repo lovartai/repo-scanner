@@ -21,27 +21,51 @@ program
   .option('-e, --extensions <extensions>', 'File extensions to analyze (comma-separated)', 'js,ts,jsx,tsx,py,java,cpp,c,go,rs')
   .option('-x, --exclude <paths>', 'Paths to exclude (comma-separated)', 'node_modules,.git,dist,build')
   .option('-k, --bug-keywords <keywords>', 'Bug fix keywords (comma-separated)', 'fix,bug,patch,issue,error,correct,resolve')
+  .option('-d, --dir <directory>', 'Scan only a specific directory within the repository')
   .action(async (path, options) => {
     try {
       const repoPath = resolve(process.cwd(), path || '.');
       
-      // Verify it's a git repository
-      if (!existsSync(resolve(repoPath, '.git'))) {
+      // Find the git root
+      let gitRoot = repoPath;
+      let currentPath = repoPath;
+      while (currentPath !== '/' && !existsSync(resolve(currentPath, '.git'))) {
+        currentPath = resolve(currentPath, '..');
+      }
+      
+      if (!existsSync(resolve(currentPath, '.git'))) {
         console.error(chalk.red('Error: Not a git repository!'));
         process.exit(1);
       }
+      
+      gitRoot = currentPath;
 
-      console.log(chalk.blue(`Scanning repository: ${repoPath}`));
+      console.log(chalk.blue(`Git repository root: ${gitRoot}`));
+      
+      // If a specific directory is requested, validate it
+      let scanPath = '';
+      if (options.dir) {
+        scanPath = options.dir;
+        const fullScanPath = resolve(gitRoot, scanPath);
+        if (!existsSync(fullScanPath)) {
+          console.error(chalk.red(`Error: Directory '${scanPath}' does not exist in the repository!`));
+          process.exit(1);
+        }
+        console.log(chalk.blue(`Scanning directory: ${scanPath}`));
+      } else {
+        console.log(chalk.blue('Scanning entire repository'));
+      }
 
       // Parse options
       const analyzerOptions = {
         fileExtensions: options.extensions.split(',').map((e: string) => e.trim()),
         excludePaths: options.exclude.split(',').map((p: string) => p.trim()),
-        bugKeywords: options.bugKeywords.split(',').map((k: string) => k.trim())
+        bugKeywords: options.bugKeywords.split(',').map((k: string) => k.trim()),
+        includePaths: options.dir ? [scanPath + '/**/*'] : undefined
       };
 
       // Create scanner and run analysis
-      const scanner = new RepoScanner(repoPath, analyzerOptions);
+      const scanner = new RepoScanner(gitRoot, analyzerOptions);
       const analysis = await scanner.scan();
 
       // Generate report

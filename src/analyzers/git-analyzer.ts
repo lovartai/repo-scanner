@@ -24,11 +24,32 @@ export class GitAnalyzer {
   async analyze(): Promise<Map<string, FileAnalysis>> {
     const fileAnalysisMap = new Map<string, FileAnalysis>();
     
-    // Get all commits
-    const log = await this.git.log(['--all', '--numstat', '--date=iso']);
-    
-    // Get all files in the repository
+    // Get all files in the repository first
     const files = await this.getRepoFiles();
+    
+    // Get commits only for the specified paths using raw git command for better performance
+    let pathFilter = '';
+    
+    if (this.options.includePaths && this.options.includePaths.length > 0 && this.options.includePaths[0] !== '**/*') {
+      // Extract the base directory from include paths
+      const basePaths = this.options.includePaths.map(path => 
+        path.replace('/**/*', '').replace('**/*', '')
+      ).filter(path => path.length > 0);
+      
+      if (basePaths.length > 0) {
+        pathFilter = `-- ${basePaths.join(' ')}`;
+      }
+    }
+    
+    // Use raw git command for better performance with file stats
+    // Add a delimiter to separate commits
+    const rawLog = await this.git.raw([
+      'log', 
+      '--all',
+      '--format=COMMIT_START%n%H|%an|%ae|%aI|%s',
+      '--name-only',
+      ...pathFilter.split(' ').filter(arg => arg.length > 0)
+    ]);
     
     // Initialize file analysis for each file
     for (const file of files) {
@@ -36,45 +57,77 @@ export class GitAnalyzer {
         path: file,
         modificationFrequency: 0,
         bugFixCount: 0,
-        lastModified: new Date(),
-        firstCommit: new Date(),
+        lastModified: new Date(0), // Initialize to epoch
+        firstCommit: new Date('2099-01-01'), // Initialize to future date
         metrics: await this.analyzeFileMetrics(join(this.repoPath, file)),
         authors: []
       });
     }
 
     // Process commit history
-    await this.processCommitHistory(log, fileAnalysisMap);
+    await this.processCommitHistory(rawLog, fileAnalysisMap);
     
     return fileAnalysisMap;
   }
 
   private async getRepoFiles(): Promise<string[]> {
-    const patterns = this.options.fileExtensions!.map(ext => `**/*.${ext}`);
     const files: string[] = [];
     
-    for (const pattern of patterns) {
-      const matched = await glob(pattern, {
-        cwd: this.repoPath,
-        ignore: this.options.excludePaths
-      });
-      files.push(...matched);
+    // If includePaths is specified, use those patterns instead
+    if (this.options.includePaths && this.options.includePaths.length > 0 && this.options.includePaths[0] !== '**/*') {
+      for (const includePath of this.options.includePaths) {
+        for (const ext of this.options.fileExtensions!) {
+          const pattern = includePath.endsWith('**/*') 
+            ? includePath.replace('**/*', `**/*.${ext}`)
+            : `${includePath}/**/*.${ext}`;
+          
+          const matched = await glob(pattern, {
+            cwd: this.repoPath,
+            ignore: this.options.excludePaths
+          });
+          files.push(...matched);
+        }
+      }
+    } else {
+      // Default behavior - scan entire repo
+      const patterns = this.options.fileExtensions!.map(ext => `**/*.${ext}`);
+      
+      for (const pattern of patterns) {
+        const matched = await glob(pattern, {
+          cwd: this.repoPath,
+          ignore: this.options.excludePaths
+        });
+        files.push(...matched);
+      }
     }
     
     return files;
   }
 
-  private async processCommitHistory(log: LogResult, fileAnalysisMap: Map<string, FileAnalysis>) {
-    const commits = log.all;
+  private async processCommitHistory(rawLog: string, fileAnalysisMap: Map<string, FileAnalysis>) {
+    // Parse the raw log output using our delimiter
+    const commits = rawLog.split('COMMIT_START').filter(block => block.trim());
     
-    for (const commit of commits) {
-      const isBugFix = this.isBugFixCommit(commit.message);
-      const commitDate = new Date(commit.date);
+    console.log(`\nProcessing ${commits.length} commits...`);
+    
+    for (const commitBlock of commits) {
+      const lines = commitBlock.trim().split('\n');
+      if (lines.length < 1) continue;
       
-      // Get files changed in this commit
-      const changedFiles = await this.getChangedFiles(commit.hash);
+      // Parse commit info from first line
+      const commitInfo = lines[0];
+      if (!commitInfo.includes('|')) continue;
       
-      for (const file of changedFiles) {
+      const [hash, authorName, authorEmail, date, ...messageParts] = commitInfo.split('|');
+      const message = messageParts.join('|');
+      const isBugFix = this.isBugFixCommit(message);
+      const commitDate = new Date(date);
+      
+      // Parse changed files (remaining lines)
+      for (let i = 1; i < lines.length; i++) {
+        const file = lines[i].trim();
+        if (!file || file.length === 0) continue;
+        
         if (fileAnalysisMap.has(file)) {
           const analysis = fileAnalysisMap.get(file)!;
           
@@ -95,18 +148,35 @@ export class GitAnalyzer {
           }
           
           // Add author if not already present
-          if (!analysis.authors.includes(commit.author_name)) {
-            analysis.authors.push(commit.author_name);
+          if (!analysis.authors.includes(authorName)) {
+            analysis.authors.push(authorName);
           }
         }
       }
     }
+    
+    // Debug: log some statistics
+    const totalFiles = Array.from(fileAnalysisMap.values());
+    const filesWithBugFixes = totalFiles.filter(f => f.bugFixCount > 0).length;
+    const filesWithMultipleAuthors = totalFiles.filter(f => f.authors.length > 1).length;
+    console.log(`Files with bug fixes: ${filesWithBugFixes}/${totalFiles.length}`);
+    console.log(`Files with multiple authors: ${filesWithMultipleAuthors}/${totalFiles.length}`);
   }
 
   private isBugFixCommit(message: string): boolean {
     const lowerMessage = message.toLowerCase();
-    return this.options.bugKeywords!.some(keyword => lowerMessage.includes(keyword));
+    const isBugFix = this.options.bugKeywords!.some(keyword => lowerMessage.includes(keyword));
+    
+    // Debug: log first few bug fix commits
+    if (isBugFix && (!this.debugBugFixCount || this.debugBugFixCount < 3)) {
+      console.log(`Bug fix commit found: "${message}"`);
+      this.debugBugFixCount = (this.debugBugFixCount || 0) + 1;
+    }
+    
+    return isBugFix;
   }
+  
+  private debugBugFixCount?: number;
 
   private async getChangedFiles(commitHash: string): Promise<string[]> {
     try {
