@@ -179,6 +179,41 @@ export class HtmlReporter {
             max-height: calc(100vh - 200px);
             overflow-y: auto;
         }
+        .search-container {
+            padding: 10px 15px;
+            background: #f8f9fa;
+            border-bottom: 1px solid #e0e0e0;
+        }
+        .search-input {
+            width: 100%;
+            max-width: 400px;
+            padding: 6px 12px;
+            font-size: 12px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+        .search-input:focus {
+            border-color: #2563eb;
+            box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.1);
+        }
+        .search-info {
+            font-size: 11px;
+            color: #666;
+            margin-top: 5px;
+        }
+        .no-results {
+            text-align: center;
+            padding: 40px;
+            color: #666;
+            font-size: 14px;
+        }
+        .highlight {
+            background-color: #fef3c7;
+            font-weight: 600;
+            padding: 0;
+        }
     </style>
 </head>
 <body>
@@ -220,6 +255,14 @@ export class HtmlReporter {
         <div class="table-header">
             <div class="table-title">File Analysis Details</div>
             <div class="table-info">Click column headers to sort</div>
+        </div>
+        <div class="search-container">
+            <input type="text" 
+                   class="search-input" 
+                   id="searchInput" 
+                   placeholder="Search files... (substring search)"
+                   autocomplete="off">
+            <div class="search-info" id="searchInfo">Type to filter files by substring match (case-insensitive)</div>
         </div>
         <div class="table-wrapper">
             <table id="dataTable">
@@ -318,6 +361,159 @@ export class HtmlReporter {
                 // Re-append sorted rows
                 sortedRows.forEach(row => tbody.appendChild(row));
             });
+        });
+
+        // Fuzzy search functionality
+        const searchInput = document.getElementById('searchInput');
+        const searchInfo = document.getElementById('searchInfo');
+        let allRows = Array.from(tbody.querySelectorAll('tr'));
+        
+        // Fuzzy search algorithm requiring consecutive matches
+        function fuzzyMatch(pattern, text) {
+            pattern = pattern.toLowerCase();
+            text = text.toLowerCase();
+            
+            // Find all occurrences where pattern appears consecutively in text
+            const matches = [];
+            
+            for (let i = 0; i <= text.length - pattern.length; i++) {
+                let isMatch = true;
+                const positions = [];
+                
+                for (let j = 0; j < pattern.length; j++) {
+                    if (text[i + j] !== pattern[j]) {
+                        isMatch = false;
+                        break;
+                    }
+                    positions.push(i + j);
+                }
+                
+                if (isMatch) {
+                    // Calculate score based on match position
+                    // Earlier matches get higher scores
+                    const score = 100 - (i / text.length * 50) + (100 / text.length);
+                    matches.push({
+                        startPos: i,
+                        positions: positions,
+                        score: score
+                    });
+                }
+            }
+            
+            if (matches.length > 0) {
+                // Return the best match (earliest position)
+                const bestMatch = matches[0];
+                return { 
+                    matched: true, 
+                    score: bestMatch.score, 
+                    positions: bestMatch.positions 
+                };
+            }
+            
+            return { matched: false, score: 0, positions: [] };
+        }
+        
+        // Highlight matched characters
+        function highlightText(text, positions) {
+            if (positions.length === 0) return text;
+            
+            let result = '';
+            let lastIdx = 0;
+            
+            positions.forEach(pos => {
+                result += text.substring(lastIdx, pos);
+                result += '<span class="highlight">' + text[pos] + '</span>';
+                lastIdx = pos + 1;
+            });
+            
+            result += text.substring(lastIdx);
+            return result;
+        }
+        
+        searchInput.addEventListener('input', (e) => {
+            const searchTerm = e.target.value.trim();
+            
+            if (!searchTerm) {
+                // Show all rows and remove highlights
+                allRows.forEach(row => {
+                    row.style.display = '';
+                    const pathCell = row.querySelector('.path-cell');
+                    if (pathCell) {
+                        const fileData = JSON.parse(row.dataset.file);
+                        pathCell.innerHTML = fileData.path;
+                    }
+                });
+                searchInfo.textContent = 'Type to filter files by substring match (case-insensitive)';
+                return;
+            }
+            
+            let visibleCount = 0;
+            const matchedRows = [];
+            
+            allRows.forEach(row => {
+                const fileData = JSON.parse(row.dataset.file);
+                const filePath = fileData.path;
+                const matchResult = fuzzyMatch(searchTerm, filePath);
+                
+                if (matchResult.matched) {
+                    row.style.display = '';
+                    visibleCount++;
+                    matchedRows.push({ row, score: matchResult.score, positions: matchResult.positions, filePath });
+                    
+                    // Highlight matched characters in path
+                    const pathCell = row.querySelector('.path-cell');
+                    if (pathCell) {
+                        pathCell.innerHTML = highlightText(filePath, matchResult.positions);
+                    }
+                } else {
+                    row.style.display = 'none';
+                }
+            });
+            
+            // Sort by relevance score and re-order in DOM
+            if (matchedRows.length > 0) {
+                matchedRows.sort((a, b) => b.score - a.score);
+                matchedRows.forEach(({ row }) => {
+                    tbody.appendChild(row);
+                });
+            }
+            
+            // Update search info
+            if (visibleCount === 0) {
+                searchInfo.innerHTML = '<span style="color: #dc2626;">No files match your search</span>';
+                // Add a no results message in the table
+                if (!document.getElementById('noResultsRow')) {
+                    const noResultsRow = document.createElement('tr');
+                    noResultsRow.id = 'noResultsRow';
+                    noResultsRow.innerHTML = '<td colspan="12" class="no-results">No files found matching "' + searchTerm + '"</td>';
+                    tbody.appendChild(noResultsRow);
+                }
+            } else {
+                searchInfo.innerHTML = 'Showing <strong>' + visibleCount + '</strong> of <strong>' + allRows.length + '</strong> files';
+                // Remove no results row if it exists
+                const noResultsRow = document.getElementById('noResultsRow');
+                if (noResultsRow) {
+                    noResultsRow.remove();
+                }
+            }
+        });
+        
+        // Focus search input when pressing '/' key
+        document.addEventListener('keydown', (e) => {
+            if (e.key === '/' && document.activeElement !== searchInput) {
+                e.preventDefault();
+                searchInput.focus();
+                searchInput.select();
+            }
+        });
+        
+        // Clear search when pressing Escape
+        searchInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+                searchInput.value = '';
+                searchInput.dispatchEvent(new Event('input'));
+                searchInput.blur();
+            }
         });
     </script>
 </body>
