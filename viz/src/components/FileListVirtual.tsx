@@ -7,13 +7,14 @@ import type { FileAnalysis, SortField, SortOrder } from '@/types';
 
 interface FileListProps {
   files: FileAnalysis[];
+  showHeatmap: boolean;
+  onHeatmapChange: (value: boolean) => void;
 }
 
-export function FileList({ files }: FileListProps) {
+export function FileList({ files, showHeatmap, onHeatmapChange }: FileListProps) {
   const [searchTerm, setSearchTerm] = useState('');
   const [sortField, setSortField] = useState<SortField>('modificationFrequency');
   const [sortOrder, setSortOrder] = useState<SortOrder>('desc');
-  const [showHeatmap, setShowHeatmap] = useState(false);
 
   const parentRef = useRef<HTMLDivElement>(null);
 
@@ -134,7 +135,7 @@ export function FileList({ files }: FileListProps) {
           <Switch
             id="heatmap-toggle"
             checked={showHeatmap}
-            onCheckedChange={setShowHeatmap}
+            onCheckedChange={onHeatmapChange}
           />
         </div>
       </div>

@@ -1,14 +1,62 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { DataImport } from '@/components/DataImport';
 import { Statistics } from '@/components/Statistics';
 import { FileList } from '@/components/FileListVirtual';
-import { Charts } from '@/components/Charts';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import type { RepoAnalysis } from '@/types';
 import { GitBranch } from 'lucide-react';
 
+const STORAGE_KEY = 'repo-scanner-data';
+const HEATMAP_STORAGE_KEY = 'repo-scanner-heatmap';
+
 function App() {
   const [data, setData] = useState<RepoAnalysis | null>(null);
+  const [showHeatmap, setShowHeatmap] = useState(false);
+
+  // 从 localStorage 加载数据
+  useEffect(() => {
+    const savedData = localStorage.getItem(STORAGE_KEY);
+    if (savedData) {
+      try {
+        const parsedData = JSON.parse(savedData);
+        setData(parsedData);
+      } catch (error) {
+        console.error('加载本地数据失败:', error);
+        localStorage.removeItem(STORAGE_KEY);
+      }
+    }
+    
+    // 加载 heatmap 状态
+    const savedHeatmap = localStorage.getItem(HEATMAP_STORAGE_KEY);
+    if (savedHeatmap === 'true') {
+      setShowHeatmap(true);
+    }
+  }, []);
+
+  // 处理 heatmap 状态变化
+  const handleHeatmapChange = (value: boolean) => {
+    setShowHeatmap(value);
+    localStorage.setItem(HEATMAP_STORAGE_KEY, value.toString());
+  };
+
+  // 处理数据加载
+  const handleDataLoad = (newData: RepoAnalysis) => {
+    setData(newData);
+    // 保存到 localStorage
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(newData));
+    } catch (error) {
+      console.error('保存数据到本地失败:', error);
+    }
+  };
+
+  // 清除数据
+  const clearData = () => {
+    setData(null);
+    localStorage.removeItem(STORAGE_KEY);
+    localStorage.removeItem(HEATMAP_STORAGE_KEY);
+    setShowHeatmap(false);
+  };
 
   if (!data) {
     return (
@@ -23,7 +71,7 @@ function App() {
               Visualize your repository analysis data
             </p>
           </div>
-          <DataImport onDataLoad={setData} />
+          <DataImport onDataLoad={handleDataLoad} />
         </div>
       </div>
     );
@@ -44,24 +92,19 @@ function App() {
 
         <Statistics data={data} />
 
-        <Tabs defaultValue="files" className="mt-4">
-          <TabsList className="grid w-full grid-cols-2 max-w-md">
-            <TabsTrigger value="files">File Analysis</TabsTrigger>
-            <TabsTrigger value="charts">Visualizations</TabsTrigger>
-          </TabsList>
-          
+        <Tabs defaultValue="files" className="mt-4">          
           <TabsContent value="files" className="mt-4">
-            <FileList files={data.files} />
-          </TabsContent>
-          
-          <TabsContent value="charts" className="mt-4">
-            <Charts files={data.files} />
+            <FileList 
+              files={data.files} 
+              showHeatmap={showHeatmap}
+              onHeatmapChange={handleHeatmapChange}
+            />
           </TabsContent>
         </Tabs>
 
         <div className="mt-4 text-center">
           <button
-            onClick={() => setData(null)}
+            onClick={clearData}
             className="text-sm text-muted-foreground hover:text-foreground underline"
           >
             Load different data
