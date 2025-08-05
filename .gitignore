@@ -6,8 +6,6 @@ dist/
 coverage/
 .vscode/
 .idea/
-*.json
 *.csv
-*.html
 !package.json
 !tsconfig.json
