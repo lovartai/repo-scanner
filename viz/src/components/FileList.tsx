@@ -45,6 +45,11 @@ export function FileList({ files }: FileListProps) {
         bValue = b.metrics.codeLines;
       }
 
+      if (sortField === 'authors') {
+        aValue = a.authors.length;
+        bValue = b.authors.length;
+      }
+
       if (sortField === 'lastModified') {
         aValue = new Date(aValue).getTime();
         bValue = new Date(bValue).getTime();
@@ -169,8 +174,11 @@ export function FileList({ files }: FileListProps) {
               >
                 Last Modified <SortIcon field="lastModified" />
               </TableHead>
-              <TableHead className="text-right w-16 whitespace-nowrap">
-                Auth
+              <TableHead 
+                className="cursor-pointer hover:bg-muted/50 text-right w-16 whitespace-nowrap"
+                onClick={() => handleSort('authors')}
+              >
+                Auth <SortIcon field="authors" />
               </TableHead>
             </TableRow>
           </TableHeader>

@@ -21,5 +21,5 @@ export interface RepoAnalysis {
   files: FileAnalysis[];
 }
 
-export type SortField = 'path' | 'modificationFrequency' | 'bugFixCount' | 'lastModified' | 'codeLines';
+export type SortField = 'path' | 'modificationFrequency' | 'bugFixCount' | 'lastModified' | 'codeLines' | 'authors';
 export type SortOrder = 'asc' | 'desc';

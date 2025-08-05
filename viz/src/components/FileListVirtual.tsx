@@ -40,6 +40,11 @@ export function FileList({ files }: FileListProps) {
         bValue = b.metrics.codeLines;
       }
 
+      if (sortField === 'authors') {
+        aValue = a.authors.length;
+        bValue = b.authors.length;
+      }
+
       if (sortField === 'lastModified') {
         aValue = new Date(aValue).getTime();
         bValue = new Date(bValue).getTime();
@@ -167,8 +172,11 @@ export function FileList({ files }: FileListProps) {
             >
               Last Modified <SortIcon field="lastModified" />
             </div>
-            <div className="w-16 py-2 px-2 text-right">
-              Auth
+            <div 
+              className="w-16 py-2 px-2 text-right cursor-pointer hover:bg-muted/50"
+              onClick={() => handleSort('authors')}
+            >
+              Auth <SortIcon field="authors" />
             </div>
           </div>
         </div>
