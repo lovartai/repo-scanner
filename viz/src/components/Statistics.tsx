@@ -79,33 +79,33 @@ export function Statistics({ data }: StatisticsProps) {
   ];
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-3">
       <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Calendar className="w-5 h-5" />
+        <CardHeader className="py-3">
+          <CardTitle className="flex items-center gap-2 text-base">
+            <Calendar className="w-4 h-4" />
             Analysis Information
           </CardTitle>
         </CardHeader>
-        <CardContent>
-          <div className="space-y-2 text-sm">
+        <CardContent className="py-2">
+          <div className="space-y-1 text-xs">
             <p><strong>Repository:</strong> {data.repositoryPath}</p>
             <p><strong>Analyzed at:</strong> {formatDate(data.analyzedAt)}</p>
           </div>
         </CardContent>
       </Card>
 
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+      <div className="grid gap-3 md:grid-cols-3 lg:grid-cols-6">
         {stats.map((stat) => (
           <Card key={stat.title}>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-1 pt-3">
+              <CardTitle className="text-xs font-medium">
                 {stat.title}
               </CardTitle>
-              <stat.icon className="h-4 w-4 text-muted-foreground" />
+              <stat.icon className="h-3 w-3 text-muted-foreground" />
             </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{stat.value}</div>
+            <CardContent className="pb-3">
+              <div className="text-lg font-bold">{stat.value}</div>
               <p className="text-xs text-muted-foreground">
                 {stat.description}
               </p>

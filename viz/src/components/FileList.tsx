@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react';
-import { ChevronUp, ChevronDown, FileCode } from 'lucide-react';
+import { ChevronUp, ChevronDown, FileCode, Palette } from 'lucide-react';
 import { Input } from '@/components/ui/input';
+import { Switch } from '@/components/ui/switch';
 import {
   Table,
   TableBody,
@@ -19,6 +20,7 @@ export function FileList({ files }: FileListProps) {
   const [searchTerm, setSearchTerm] = useState('');
   const [sortField, setSortField] = useState<SortField>('modificationFrequency');
   const [sortOrder, setSortOrder] = useState<SortOrder>('desc');
+  const [showHeatmap, setShowHeatmap] = useState(false);
 
   const handleSort = (field: SortField) => {
     if (sortField === field) {
@@ -69,51 +71,105 @@ export function FileList({ files }: FileListProps) {
     return new Date(dateString).toLocaleDateString();
   };
 
+  // Calculate min and max values for heatmap
+  const { minMax } = useMemo(() => {
+    const result = {
+      minMax: {
+        modificationFrequency: { min: Infinity, max: -Infinity },
+        bugFixCount: { min: Infinity, max: -Infinity },
+        codeLines: { min: Infinity, max: -Infinity },
+      }
+    };
+
+    files.forEach(file => {
+      result.minMax.modificationFrequency.min = Math.min(result.minMax.modificationFrequency.min, file.modificationFrequency);
+      result.minMax.modificationFrequency.max = Math.max(result.minMax.modificationFrequency.max, file.modificationFrequency);
+      result.minMax.bugFixCount.min = Math.min(result.minMax.bugFixCount.min, file.bugFixCount);
+      result.minMax.bugFixCount.max = Math.max(result.minMax.bugFixCount.max, file.bugFixCount);
+      result.minMax.codeLines.min = Math.min(result.minMax.codeLines.min, file.metrics.codeLines);
+      result.minMax.codeLines.max = Math.max(result.minMax.codeLines.max, file.metrics.codeLines);
+    });
+
+    return result;
+  }, [files]);
+
+  const getHeatmapColor = (value: number, field: 'modificationFrequency' | 'bugFixCount' | 'codeLines') => {
+    if (!showHeatmap) return '';
+    
+    const min = minMax[field].min;
+    const max = minMax[field].max;
+    
+    if (max === min) return '';
+    
+    const ratio = (value - min) / (max - min);
+    const intensity = Math.round(ratio * 100);
+    
+    // Using red for high values (more modifications/bugs = more attention needed)
+    if (field === 'modificationFrequency' || field === 'bugFixCount') {
+      return `rgba(239, 68, 68, ${intensity / 100 * 0.3})`; // red with varying opacity
+    }
+    // Using blue for code lines (neutral metric)
+    return `rgba(59, 130, 246, ${intensity / 100 * 0.3})`; // blue with varying opacity
+  };
+
   return (
     <div className="space-y-4">
-      <Input
-        type="text"
-        placeholder="Search files..."
-        value={searchTerm}
-        onChange={(e) => setSearchTerm(e.target.value)}
-        className="max-w-sm"
-      />
+      <div className="flex items-center justify-between">
+        <Input
+          type="text"
+          placeholder="Search files..."
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+          className="max-w-sm"
+        />
+        <div className="flex items-center gap-2">
+          <Palette className="w-4 h-4 text-muted-foreground" />
+          <label htmlFor="heatmap-toggle" className="text-sm text-muted-foreground">
+            Heatmap
+          </label>
+          <Switch
+            id="heatmap-toggle"
+            checked={showHeatmap}
+            onCheckedChange={setShowHeatmap}
+          />
+        </div>
+      </div>
 
-      <div className="rounded-md border max-h-[500px] overflow-auto">
+      <div className="rounded-md border h-[calc(100vh-500px)] overflow-auto">
         <Table>
           <TableHeader className="sticky top-0 bg-background z-10">
             <TableRow>
               <TableHead 
-                className="cursor-pointer hover:bg-muted/50 w-2/5"
+                className="cursor-pointer hover:bg-muted/50 w-2/5 whitespace-nowrap"
                 onClick={() => handleSort('path')}
               >
                 File Path <SortIcon field="path" />
               </TableHead>
               <TableHead 
-                className="cursor-pointer hover:bg-muted/50 text-right w-24"
+                className="cursor-pointer hover:bg-muted/50 text-right w-24 whitespace-nowrap"
                 onClick={() => handleSort('modificationFrequency')}
               >
                 Mods <SortIcon field="modificationFrequency" />
               </TableHead>
               <TableHead 
-                className="cursor-pointer hover:bg-muted/50 text-right w-20"
+                className="cursor-pointer hover:bg-muted/50 text-right w-20 whitespace-nowrap"
                 onClick={() => handleSort('bugFixCount')}
               >
                 Bugs <SortIcon field="bugFixCount" />
               </TableHead>
               <TableHead 
-                className="cursor-pointer hover:bg-muted/50 text-right w-20"
+                className="cursor-pointer hover:bg-muted/50 text-right w-20 whitespace-nowrap"
                 onClick={() => handleSort('codeLines')}
               >
                 LOC <SortIcon field="codeLines" />
               </TableHead>
               <TableHead 
-                className="cursor-pointer hover:bg-muted/50 text-right w-28"
+                className="cursor-pointer hover:bg-muted/50 text-right w-32 whitespace-nowrap"
                 onClick={() => handleSort('lastModified')}
               >
                 Last Modified <SortIcon field="lastModified" />
               </TableHead>
-              <TableHead className="text-right w-16">
+              <TableHead className="text-right w-16 whitespace-nowrap">
                 Auth
               </TableHead>
             </TableRow>
@@ -127,9 +183,24 @@ export function FileList({ files }: FileListProps) {
                     <span className="truncate">{file.path}</span>
                   </div>
                 </TableCell>
-                <TableCell className="text-right">{file.modificationFrequency}</TableCell>
-                <TableCell className="text-right">{file.bugFixCount}</TableCell>
-                <TableCell className="text-right">{file.metrics.codeLines}</TableCell>
+                <TableCell 
+                  className="text-right"
+                  style={{ backgroundColor: getHeatmapColor(file.modificationFrequency, 'modificationFrequency') }}
+                >
+                  {file.modificationFrequency}
+                </TableCell>
+                <TableCell 
+                  className="text-right"
+                  style={{ backgroundColor: getHeatmapColor(file.bugFixCount, 'bugFixCount') }}
+                >
+                  {file.bugFixCount}
+                </TableCell>
+                <TableCell 
+                  className="text-right"
+                  style={{ backgroundColor: getHeatmapColor(file.metrics.codeLines, 'codeLines') }}
+                >
+                  {file.metrics.codeLines}
+                </TableCell>
                 <TableCell className="text-right">{formatDate(file.lastModified)}</TableCell>
                 <TableCell className="text-right">{file.authors.length}</TableCell>
               </TableRow>
